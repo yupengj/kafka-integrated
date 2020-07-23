@@ -12,22 +12,35 @@ import org.apache.kafka.connect.data.Struct;
 import org.apache.kafka.connect.transforms.Transformation;
 import org.apache.kafka.connect.transforms.util.SchemaUtil;
 
-import java.util.Arrays;
 import java.util.HashMap;
 import java.util.Map;
 
 import static org.apache.kafka.connect.transforms.util.Requirements.requireMap;
 import static org.apache.kafka.connect.transforms.util.Requirements.requireStruct;
 
+/**
+ * 数据库字段（material_num） 转成驼峰名称（materialNum）
+ *
+ * @param <R>
+ */
 public abstract class CamelField<R extends ConnectRecord<R>> implements Transformation<R> {
 
     private final ConfigDef config = new ConfigDef();
 
-    private static final String ID = "id";
+    private static final String ID_FILE_NAME = "id";
     private static final String PURPOSE = "field replacement";
 
+    /**
+     * key 是转换前的字段名称，value 是转换后的字段名称
+     */
     private Cache<String, String> fileMappingCache;
+    /**
+     * key 是转换后的字段名称，value 是转换前的字段名称
+     */
     private Cache<String, String> reverseFileMappingCache;
+    /**
+     * Schema 缓存
+     */
     private Cache<Schema, Schema> schemaUpdateCache;
 
     @Override
@@ -46,72 +59,71 @@ public abstract class CamelField<R extends ConnectRecord<R>> implements Transfor
     public void close() {
     }
 
+    @Override
+    public R apply(R record) {
+        if (operatingSchema(record) == null) {
+            // 没有 schema
+            return applySchemaless(record);
+        } else {
+            // 有 schema
+            return applyWithSchema(record);
+        }
+    }
+
+    /**
+     * 转换没有  Schema 的 record
+     *
+     * @param record record
+     * @return 新的record
+     */
+    private R applySchemaless(R record) {
+        final Map<String, Object> value = requireMap(operatingValue(record), PURPOSE);
+        final String tableName = tableName(record);
+
+        final Map<String, Object> updatedValue = new HashMap<>(value.size());
+        for (Map.Entry<String, Object> entry : value.entrySet()) {
+            final String fieldName = entry.getKey();
+            final Object fieldValue = entry.getValue();
+            updatedValue.put(renamed(fieldName, tableName), fieldValue);
+        }
+        return newRecord(record, null, updatedValue);
+    }
+
+    /**
+     * 根据主题名称获取表名称，采用最有一个“.”后的字符串为表名
+     *
+     * @param record record
+     * @return 表名
+     */
     private String tableName(R record) {
         final String topic = record.topic();
         final int index = topic.lastIndexOf(".");
         return topic.substring(index + 1);
     }
 
-    @Override
-    public R apply(R record) {
-        if (operatingSchema(record) == null) {
-            return applySchemaless(record);
-        } else {
-            return applyWithSchema(record);
-        }
-    }
-
-    private R applySchemaless(R record) {
-        final Map<String, Object> value = requireMap(operatingValue(record), PURPOSE);
-
-        final String tableName = tableName(record);
-        final Map<String, Object> updatedValue = new HashMap<>(value.size());
-        for (Map.Entry<String, Object> e : value.entrySet()) {
-            final String fieldName = e.getKey();
-            final Object fieldValue = e.getValue();
-            updatedValue.put(renamed(fieldName, tableName), fieldValue);
-        }
-        return newRecord(record, null, updatedValue);
-    }
-
-    private R applyWithSchema(R record) {
-        final Struct value = requireStruct(operatingValue(record), PURPOSE);
-        final String tableName = tableName(record);
-
-        Schema updatedSchema = schemaUpdateCache.get(value.schema());
-        if (updatedSchema == null) {
-            updatedSchema = makeUpdatedSchema(value.schema(), tableName);
-            schemaUpdateCache.put(value.schema(), updatedSchema);
-        }
-
-        final Struct updatedValue = new Struct(updatedSchema);
-        for (Field field : updatedSchema.fields()) {
-            final Object fieldValue = value.get(reverseRenamed(field.name()));
-            updatedValue.put(field.name(), fieldValue);
-        }
-        return newRecord(record, updatedSchema, updatedValue);
-    }
-
-    private Schema makeUpdatedSchema(Schema schema, String tableName) {
-        final SchemaBuilder builder = SchemaUtil.copySchemaBasics(schema, SchemaBuilder.struct());
-        for (Field field : schema.fields()) {
-            builder.field(renamed(field.name(), tableName), field.schema());
-        }
-        return builder.build();
-    }
-
+    /**
+     * 根据字段名称转成驼峰命名格式
+     *
+     * @param fieldName 字段名称
+     * @param tableName 字段值
+     * @return 新的字段名称
+     */
     private String renamed(String fieldName, String tableName) {
+        // 从缓存中获取已转换过的名称
         final String mapping = fileMappingCache.get(fieldName);
         if (mapping != null && reverseFileMappingCache.get(mapping) != null) {
             return mapping;
         }
 
+        // 如果是id字段直接返回 “id”
         if (isIdField(fieldName, tableName)) {
-            fileMappingCache.put(fieldName, ID);
-            reverseFileMappingCache.put(ID, fieldName);
-            return ID;
+            fileMappingCache.put(fieldName, ID_FILE_NAME);
+            // 如果是id字段，则用表名最为缓存的key
+            reverseFileMappingCache.put(tableName, fieldName);
+            return ID_FILE_NAME;
         }
 
+        // 根据字段名称中的“_”转换驼峰命名格式
         final String lowerFieldName = fieldName.toLowerCase();
         StringBuilder stringBuffer = new StringBuilder(lowerFieldName.length());
         boolean flag = false;
@@ -133,28 +145,101 @@ public abstract class CamelField<R extends ConnectRecord<R>> implements Transfor
         return newField;
     }
 
+    /**
+     * 如果字段名和表名_ID相等（忽略大小写）则认为是id字段
+     *
+     * @param fieldName 字段名称
+     * @param tableName 表名
+     * @return true 是id字段
+     */
     private boolean isIdField(String fieldName, String tableName) {
-        final String lowerCaseTableName = tableName.toLowerCase();
-        final String lowerCaseFieldName = fieldName.toLowerCase();
-        if (lowerCaseFieldName.startsWith(lowerCaseTableName)) {
-            String[] idFields = {lowerCaseTableName + "_id", lowerCaseTableName + "_ID", lowerCaseTableName + "_Id", lowerCaseTableName + "_iD"};
-            return Arrays.binarySearch(idFields, lowerCaseFieldName) != -1;
-        }
-        return false;
+        final String idField = tableName + "_id";
+        return fieldName.equalsIgnoreCase(idField);
     }
 
 
-    private String reverseRenamed(String fieldName) {
+    /**
+     * 转换有  Schema 的 record
+     *
+     * @param record record
+     * @return 新的 record
+     */
+    private R applyWithSchema(R record) {
+        final Struct value = requireStruct(operatingValue(record), PURPOSE);
+        final String tableName = tableName(record);
+
+        Schema updatedSchema = schemaUpdateCache.get(value.schema());
+        if (updatedSchema == null) {
+            updatedSchema = makeUpdatedSchema(value.schema(), tableName);
+            schemaUpdateCache.put(value.schema(), updatedSchema);
+        }
+
+        final Struct updatedValue = new Struct(updatedSchema);
+        for (Field field : updatedSchema.fields()) {
+            final Object fieldValue = value.get(reverseRenamed(tableName, field.name()));
+            updatedValue.put(field.name(), fieldValue);
+        }
+        return newRecord(record, updatedSchema, updatedValue);
+    }
+
+    /**
+     * 根据转换后的字段名称，获取转换前的字段名称，目的是为了根据转换前的字段取数据
+     *
+     * @param tableName 表名
+     * @param fieldName 转换后的字段名
+     * @return 转换前的字段名
+     */
+    private String reverseRenamed(String tableName, String fieldName) {
+        if (ID_FILE_NAME.equals(fieldName)) {
+            final String reverseName = reverseFileMappingCache.get(tableName);
+            return reverseName == null ? fieldName : reverseName;
+        }
         final String mapping = reverseFileMappingCache.get(fieldName);
         return mapping == null ? fieldName : mapping;
     }
 
+    /**
+     * 复制修改 Schema
+     *
+     * @param schema    Schema
+     * @param tableName 字段名称
+     * @return 新的Schema
+     */
+    private Schema makeUpdatedSchema(Schema schema, String tableName) {
+        final SchemaBuilder builder = SchemaUtil.copySchemaBasics(schema, SchemaBuilder.struct());
+        for (Field field : schema.fields()) {
+            builder.field(renamed(field.name(), tableName), field.schema());
+        }
+        return builder.build();
+    }
+
+    /**
+     * 获得 Schema
+     *
+     * @param record record
+     * @return Schema
+     */
     protected abstract Schema operatingSchema(R record);
 
+    /**
+     * 获得 value
+     *
+     * @param record record
+     * @return value
+     */
     protected abstract Object operatingValue(R record);
 
+    /**
+     * 创建新的 record
+     *
+     * @param record        record
+     * @param updatedSchema 新的 Schema
+     * @param updatedValue  新的 value
+     * @return 新的 record
+     */
     protected abstract R newRecord(R record, Schema updatedSchema, Object updatedValue);
 
+    // 转换 key
     public static class Key<R extends ConnectRecord<R>> extends CamelField<R> {
 
         @Override
@@ -174,6 +259,11 @@ public abstract class CamelField<R extends ConnectRecord<R>> implements Transfor
 
     }
 
+    /**
+     * 转换 value
+     *
+     * @param <R>
+     */
     public static class Value<R extends ConnectRecord<R>> extends CamelField<R> {
 
         @Override

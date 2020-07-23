@@ -16,21 +16,24 @@ import static org.junit.Assert.assertEquals;
 
 public class CamelFieldTest {
 
-    private CamelField<SinkRecord> xform = new CamelField.Value<>();
+    private CamelField<SinkRecord> transformationValue = new CamelField.Value<>();
+
+    private CamelField<SinkRecord> transformationKey = new CamelField.Key<>();
 
     @Before
     public void setUp() throws Exception {
-        xform.configure(Collections.emptyMap());
+        transformationValue.configure(Collections.emptyMap());
+        transformationKey.configure(Collections.emptyMap());
     }
 
     @After
     public void tearDown() throws Exception {
-        xform.close();
+        transformationValue.close();
+        transformationKey.close();
     }
 
-
     @Test
-    public void schemaless() {
+    public void schemaless_value() {
         final Map<String, Object> value = new HashMap<>();
         value.put("MD_MATERIAL_ID", 1234);
         value.put("MATERIAL_NUM", "1234");
@@ -39,7 +42,7 @@ public class CamelFieldTest {
 
         String topic = "ibom.mstdata.md_material";
         final SinkRecord record = new SinkRecord(topic, 0, null, null, null, value, 0);
-        final SinkRecord transformedRecord = xform.apply(record);
+        final SinkRecord transformedRecord = transformationValue.apply(record);
 
         final Map updatedValue = (Map) transformedRecord.value();
         assertEquals(4, updatedValue.size());
@@ -50,7 +53,7 @@ public class CamelFieldTest {
     }
 
     @Test
-    public void schemaless_cache() {
+    public void schemaless_cache_value() {
         final Map<String, Object> value = new HashMap<>();
         value.put("MD_MATERIAL_ID", 1234);
         value.put("MATERIAL_NUM", "1234");
@@ -59,7 +62,7 @@ public class CamelFieldTest {
 
         String topic = "ibom.mstdata.md_material";
         final SinkRecord record = new SinkRecord(topic, 0, null, null, null, value, 0);
-        final SinkRecord transformedRecord = xform.apply(record);
+        final SinkRecord transformedRecord = transformationValue.apply(record);
 
         final Map updatedValue = (Map) transformedRecord.value();
         assertEquals(4, updatedValue.size());
@@ -76,7 +79,7 @@ public class CamelFieldTest {
         value2.put("TEST_ABC", 23.45d);
 
         final SinkRecord record2 = new SinkRecord(topic, 0, null, null, null, value2, 0);
-        final SinkRecord transformedRecord2 = xform.apply(record2);
+        final SinkRecord transformedRecord2 = transformationValue.apply(record2);
 
         final Map updatedValue2 = (Map) transformedRecord2.value();
         assertEquals(4, updatedValue2.size());
@@ -87,7 +90,7 @@ public class CamelFieldTest {
     }
 
     @Test
-    public void withSchema() {
+    public void withSchema_value() {
         final Schema schema = SchemaBuilder.struct().field("MD_MATERIAL_ID", Schema.INT64_SCHEMA).field("MATERIAL_NUM", Schema.STRING_SCHEMA).field("IS_COLOR", Schema.BOOLEAN_SCHEMA)
                 .field("TEST_ABC", Schema.FLOAT64_SCHEMA).build();
 
@@ -99,7 +102,7 @@ public class CamelFieldTest {
 
         String topic = "ibom.mstdata.md_material";
         final SinkRecord record = new SinkRecord(topic, 0, null, null, schema, value, 0);
-        final SinkRecord transformedRecord = xform.apply(record);
+        final SinkRecord transformedRecord = transformationValue.apply(record);
 
         final Struct updatedValue = (Struct) transformedRecord.value();
 
@@ -109,5 +112,37 @@ public class CamelFieldTest {
         assertEquals(true, updatedValue.getBoolean("isColor"));
         assertEquals(new Double(23.45d), updatedValue.getFloat64("testAbc"));
     }
+
+    @Test
+    public void schemaless_key() {
+        final Map<String, Object> key = new HashMap<>();
+        key.put("md_material_id", 1234);
+
+        String topic = "ibom.mstdata.md_material";
+        final SinkRecord record = new SinkRecord(topic, 0, null, key, null, null, 0);
+        final SinkRecord transformedRecord = transformationKey.apply(record);
+
+        final Map updatedKey = (Map) transformedRecord.key();
+        assertEquals(1, updatedKey.size());
+        assertEquals(1234, updatedKey.get("id"));
+    }
+
+    @Test
+    public void withSchema_key() {
+        final Schema schema = SchemaBuilder.struct().field("md_material_id", Schema.INT64_SCHEMA).build();
+
+        final Struct key = new Struct(schema);
+        key.put("md_material_id", 1234L);
+
+        String topic = "ibom.mstdata.md_material";
+        final SinkRecord record = new SinkRecord(topic, 0, schema, key, null, null, 0);
+        final SinkRecord transformedRecord = transformationKey.apply(record);
+
+        final Struct updatedKey = (Struct) transformedRecord.key();
+
+        assertEquals(1, updatedKey.schema().fields().size());
+        assertEquals(new Long(1234), updatedKey.getInt64("id"));
+    }
+
 
 }
