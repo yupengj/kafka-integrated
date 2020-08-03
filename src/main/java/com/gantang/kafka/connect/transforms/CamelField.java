@@ -4,6 +4,7 @@ import org.apache.kafka.common.cache.Cache;
 import org.apache.kafka.common.cache.LRUCache;
 import org.apache.kafka.common.cache.SynchronizedCache;
 import org.apache.kafka.common.config.ConfigDef;
+import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.connect.connector.ConnectRecord;
 import org.apache.kafka.connect.data.Field;
 import org.apache.kafka.connect.data.Schema;
@@ -11,8 +12,11 @@ import org.apache.kafka.connect.data.SchemaBuilder;
 import org.apache.kafka.connect.data.Struct;
 import org.apache.kafka.connect.transforms.Transformation;
 import org.apache.kafka.connect.transforms.util.SchemaUtil;
+import org.apache.kafka.connect.transforms.util.SimpleConfig;
 
+import java.util.Collections;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 import static org.apache.kafka.connect.transforms.util.Requirements.requireMap;
@@ -25,10 +29,9 @@ import static org.apache.kafka.connect.transforms.util.Requirements.requireStruc
  */
 public abstract class CamelField<R extends ConnectRecord<R>> implements Transformation<R> {
 
-    private final ConfigDef config = new ConfigDef();
-
     private static final String ID_FILE_NAME = "id";
     private static final String PURPOSE = "field replacement";
+    private static final String ID_MAPPINGS = "mappingId";
 
     /**
      * key 是转换前的字段名称，value 是转换后的字段名称
@@ -42,17 +45,56 @@ public abstract class CamelField<R extends ConnectRecord<R>> implements Transfor
      * Schema 缓存
      */
     private Cache<Schema, Schema> schemaUpdateCache;
+    /**
+     * key 是表名称，如主题是 “ibom.mstdata.md_material” 表名是“md_material”，value 是主题的id字段名称
+     */
+    private Map<String, String> tableNameToIdField = new HashMap<>();
 
     @Override
     public ConfigDef config() {
-        return this.config;
+        return CONFIG_DEF;
     }
+
+    private static final ConfigDef CONFIG_DEF = new ConfigDef().define(ID_MAPPINGS, ConfigDef.Type.LIST, Collections.emptyList(), new ConfigDef.Validator() {
+        @SuppressWarnings("unchecked")
+        @Override
+        public void ensureValid(String name, Object value) {
+            parseRenameMappings((List<String>) value);
+        }
+
+        @Override
+        public String toString() {
+            return "list of colon-delimited pairs, e.g. <code>主题名:id字段,abc:xyz</code>";
+        }
+    }, ConfigDef.Importance.MEDIUM, "Field id mappings.");
 
     @Override
     public void configure(Map<String, ?> configs) {
         fileMappingCache = new SynchronizedCache<>(new LRUCache<>(512));
         reverseFileMappingCache = new SynchronizedCache<>(new LRUCache<>(512));
         schemaUpdateCache = new SynchronizedCache<>(new LRUCache<>(16));
+        final SimpleConfig config = new SimpleConfig(CONFIG_DEF, configs);
+        tableNameToIdField = parseRenameMappings(config.getList(ID_MAPPINGS));
+    }
+
+    private static Map<String, String> parseRenameMappings(List<String> mappings) {
+        final Map<String, String> m = new HashMap<>();
+        for (String mapping : mappings) {
+            final String[] parts = mapping.split(":");
+            if (parts.length != 2) {
+                throw new ConfigException(ID_MAPPINGS, mappings, "Invalid id mapping: " + mapping);
+            }
+            m.put(parts[0], parts[1]);
+        }
+        return m;
+    }
+
+    private static Map<String, String> invert(Map<String, String> source) {
+        final Map<String, String> m = new HashMap<>();
+        for (Map.Entry<String, String> e : source.entrySet()) {
+            m.put(e.getValue(), e.getKey());
+        }
+        return m;
     }
 
     @Override
@@ -78,7 +120,7 @@ public abstract class CamelField<R extends ConnectRecord<R>> implements Transfor
      */
     private R applySchemaless(R record) {
         final Map<String, Object> value = requireMap(operatingValue(record), PURPOSE);
-        final String tableName = tableName(record);
+        final String tableName = tableName(record.topic());
 
         final Map<String, Object> updatedValue = new HashMap<>(value.size());
         for (Map.Entry<String, Object> entry : value.entrySet()) {
@@ -92,13 +134,12 @@ public abstract class CamelField<R extends ConnectRecord<R>> implements Transfor
     /**
      * 根据主题名称获取表名称，采用最有一个“.”后的字符串为表名
      *
-     * @param record record
+     * @param topicName topicName
      * @return 表名
      */
-    private String tableName(R record) {
-        final String topic = record.topic();
-        final int index = topic.lastIndexOf(".");
-        return topic.substring(index + 1);
+    private String tableName(String topicName) {
+        final int index = topicName.lastIndexOf(".");
+        return topicName.substring(index + 1);
     }
 
     /**
@@ -153,6 +194,12 @@ public abstract class CamelField<R extends ConnectRecord<R>> implements Transfor
      * @return true 是id字段
      */
     private boolean isIdField(String fieldName, String tableName) {
+        if (tableNameToIdField.containsKey(tableName)) {
+            return tableNameToIdField.get(tableName).equalsIgnoreCase(fieldName);
+        }
+        if (ID_FILE_NAME.equalsIgnoreCase(fieldName)) {
+            return true;
+        }
         final String idField = tableName + "_id";
         return fieldName.equalsIgnoreCase(idField);
     }
@@ -166,7 +213,7 @@ public abstract class CamelField<R extends ConnectRecord<R>> implements Transfor
      */
     private R applyWithSchema(R record) {
         final Struct value = requireStruct(operatingValue(record), PURPOSE);
-        final String tableName = tableName(record);
+        final String tableName = tableName(record.topic());
 
         Schema updatedSchema = schemaUpdateCache.get(value.schema());
         if (updatedSchema == null) {

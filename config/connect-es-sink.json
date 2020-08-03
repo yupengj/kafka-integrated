@@ -1,0 +1,33 @@
+{
+  "name": "es-sink",
+  "config": {
+    "connector.class": "io.confluent.connect.elasticsearch.ElasticsearchSinkConnector",
+    "tasks.max": "1",
+    "connection.url": "http://localhost:9200",
+    "connection.user": "",
+    "connection.password": "",
+    "topics.regex": "^ibom.mstdata.*$",
+    "type.name": "_doc",
+	"schema.ignore": "true",
+	"key.ignore": "false",
+	"transforms": "renameTopic,extractAfter,camelKeyField,extractId,camelValueField,createDateConverter,updateDateConverter",
+	"transforms.renameTopic.type": "org.apache.kafka.connect.transforms.RegexRouter",
+	"transforms.renameTopic.regex": ".*\\.(.*)",
+	"transforms.renameTopic.replacement": "$1",
+	"transforms.extractAfter.type": "org.apache.kafka.connect.transforms.ExtractField$Value",
+	"transforms.extractAfter.field": "after",
+	"transforms.camelValueField.type": "com.gantang.kafka.connect.transforms.CamelField$Value",
+	"transforms.camelKeyField.type": "com.gantang.kafka.connect.transforms.CamelField$Key",
+	"transforms.extractId.type": "org.apache.kafka.connect.transforms.ExtractField$Key",
+	"transforms.extractId.field": "id",
+	"transforms.createDateConverter.type": "org.apache.kafka.connect.transforms.TimestampConverter$Value",
+	"transforms.createDateConverter.target.type": "string",
+	"transforms.createDateConverter.field": "createDate",
+	"transforms.createDateConverter.format": "yyyy-MM-dd HH:mm:ss",
+	"transforms.updateDateConverter.type": "org.apache.kafka.connect.transforms.TimestampConverter$Value",
+	"transforms.updateDateConverter.target.type": "string",
+	"transforms.updateDateConverter.field": "updateDate",
+	"transforms.updateDateConverter.format": "yyyy-MM-dd HH:mm:ss",
+	"consumer.max.partition.fetch.bytes": "52428800"
+  }
+}

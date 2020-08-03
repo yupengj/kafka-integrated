@@ -17,13 +17,16 @@ import static org.junit.Assert.assertEquals;
 public class CamelFieldTest {
 
     private CamelField<SinkRecord> transformationValue = new CamelField.Value<>();
-
     private CamelField<SinkRecord> transformationKey = new CamelField.Key<>();
+    private CamelField<SinkRecord> transformationValueConfig = new CamelField.Value<>();
+    private CamelField<SinkRecord> transformationKeyConfig = new CamelField.Key<>();
 
     @Before
     public void setUp() throws Exception {
         transformationValue.configure(Collections.emptyMap());
         transformationKey.configure(Collections.emptyMap());
+        transformationValueConfig.configure(Collections.singletonMap("mappingId", "bm_bommgmt_part_assembly_ebom:bm_bommgmt_part_assembly_id,bm_bommgmt_part_assembly_mbom:bm_bommgmt_part_assembly_id"));
+        transformationKeyConfig.configure(Collections.singletonMap("mappingId", "bm_bommgmt_part_assembly_ebom:bm_bommgmt_part_assembly_id,bm_bommgmt_part_assembly_mbom:bm_bommgmt_part_assembly_id"));
     }
 
     @After
@@ -137,6 +140,24 @@ public class CamelFieldTest {
         String topic = "ibom.mstdata.md_material";
         final SinkRecord record = new SinkRecord(topic, 0, schema, key, null, null, 0);
         final SinkRecord transformedRecord = transformationKey.apply(record);
+
+        final Struct updatedKey = (Struct) transformedRecord.key();
+
+        assertEquals(1, updatedKey.schema().fields().size());
+        assertEquals(new Long(1234), updatedKey.getInt64("id"));
+    }
+
+
+    @Test
+    public void withSchema_key_config(){
+        final Schema schema = SchemaBuilder.struct().field("bm_bommgmt_part_assembly_id", Schema.INT64_SCHEMA).build();
+
+        final Struct key = new Struct(schema);
+        key.put("bm_bommgmt_part_assembly_id", 1234L);
+
+        String topic = "ibom.bommgmt.bm_bommgmt_part_assembly_ebom";
+        final SinkRecord record = new SinkRecord(topic, 0, schema, key, null, null, 0);
+        final SinkRecord transformedRecord = transformationKeyConfig.apply(record);
 
         final Struct updatedKey = (Struct) transformedRecord.key();
 

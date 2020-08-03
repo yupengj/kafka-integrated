@@ -1,0 +1,18 @@
+{
+  "name": "pg-source",
+  "config": {
+    "connector.class": "io.debezium.connector.postgresql.PostgresConnector",
+    "tasks.max": "1",
+    "database.hostname": "localhost",
+    "database.port": "5432",
+    "database.user": "postgres",
+    "database.password": "app",
+    "database.dbname": "postgres",
+    "database.server.name": "ibom",
+    "schema.whitelist": "mstdata",
+    "table.blacklist": "mstdata.schema_version",
+    "plugin.name": "wal2json",
+    "snapshot.mode": "initial",
+    "slot.name": "test"
+  }
+}

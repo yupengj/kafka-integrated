@@ -18,7 +18,7 @@ public class RegexRouterTest {
     public void before() {
         Map<String, Object> props = new HashMap<>();
         props.put("regex", ".*\\.(.*)");
-        props.put("replacement", "$1");
+        props.put("replacement", "full_text_search.$1");
         regexRouter.configure(props);
     }
 
@@ -29,7 +29,7 @@ public class RegexRouterTest {
 
         final ConnectRecord apply = regexRouter.apply(record);
         final String newTopic = apply.topic();
-        Assert.assertEquals("md_material", newTopic);
+        Assert.assertEquals("full_text_search.md_material", newTopic);
 
         final int index = newTopic.lastIndexOf(".");
         final String tableName = newTopic.substring(index + 1);
