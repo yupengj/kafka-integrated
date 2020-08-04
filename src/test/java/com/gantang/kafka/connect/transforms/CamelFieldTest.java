@@ -13,6 +13,7 @@ import java.util.HashMap;
 import java.util.Map;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNull;
 
 public class CamelFieldTest {
 
@@ -25,7 +26,8 @@ public class CamelFieldTest {
     public void setUp() throws Exception {
         transformationValue.configure(Collections.emptyMap());
         transformationKey.configure(Collections.emptyMap());
-        transformationValueConfig.configure(Collections.singletonMap("mappingId", "bm_bommgmt_part_assembly_ebom:bm_bommgmt_part_assembly_id,bm_bommgmt_part_assembly_mbom:bm_bommgmt_part_assembly_id"));
+        transformationValueConfig
+                .configure(Collections.singletonMap("mappingId", "bm_bommgmt_part_assembly_ebom:bm_bommgmt_part_assembly_id,bm_bommgmt_part_assembly_mbom:bm_bommgmt_part_assembly_id"));
         transformationKeyConfig.configure(Collections.singletonMap("mappingId", "bm_bommgmt_part_assembly_ebom:bm_bommgmt_part_assembly_id,bm_bommgmt_part_assembly_mbom:bm_bommgmt_part_assembly_id"));
     }
 
@@ -117,6 +119,21 @@ public class CamelFieldTest {
     }
 
     @Test
+    public void withSchema_value_null() {
+        final Schema schema = SchemaBuilder.struct().field("MD_MATERIAL_ID", Schema.INT64_SCHEMA).field("MATERIAL_NUM", Schema.STRING_SCHEMA).field("IS_COLOR", Schema.BOOLEAN_SCHEMA)
+                .field("TEST_ABC", Schema.FLOAT64_SCHEMA).build();
+
+        String topic = "ibom.mstdata.md_material";
+        final SinkRecord record = new SinkRecord(topic, 0, null, null, schema, null, 0);
+        final SinkRecord transformedRecord = transformationValue.apply(record);
+
+        final Struct updatedValue = (Struct) transformedRecord.value();
+
+        assertNull(updatedValue);
+    }
+
+
+    @Test
     public void schemaless_key() {
         final Map<String, Object> key = new HashMap<>();
         key.put("md_material_id", 1234);
@@ -149,7 +166,7 @@ public class CamelFieldTest {
 
 
     @Test
-    public void withSchema_key_config(){
+    public void withSchema_key_config() {
         final Schema schema = SchemaBuilder.struct().field("bm_bommgmt_part_assembly_id", Schema.INT64_SCHEMA).build();
 
         final Struct key = new Struct(schema);

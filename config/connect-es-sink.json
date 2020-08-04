@@ -1,24 +1,25 @@
 {
   "name": "ibom-es-sink",
-  "config": {
-    "connector.class": "io.confluent.connect.elasticsearch.ElasticsearchSinkConnector",
-    "tasks.max": "1",
-    "connection.url": "https://kafka-es.gantcloud.com",
-    "connection.user": "",
-    "connection.password": "",
-    "topics.regex": "^ibom.*$",
-    "type.name": "_doc",
-    "schema.ignore": "true",
-    "key.ignore": "false",
-    "consumer.max.partition.fetch.bytes": "52428800",
-    "transforms": "extractAfter,camelKeyField,extractId,camelValueField",
-    "transforms.extractAfter.type": "org.apache.kafka.connect.transforms.ExtractField$Value",
-    "transforms.extractAfter.field": "after",
-    "transforms.camelKeyField.type": "com.gantang.kafka.connect.transforms.CamelField$Key",
-    "transforms.camelKeyField.mappingId": "bm_part_assembly_ebom:bm_part_assembly_id,bm_part_assembly_mbom:bm_part_assembly_id,bm_part_assembly_sbom:bm_part_assembly_id,bm_part_assembly_pbom:bm_part_assembly_id",
-    "transforms.extractId.type": "org.apache.kafka.connect.transforms.ExtractField$Key",
-    "transforms.extractId.field": "id",
-    "transforms.camelValueField.type": "com.gantang.kafka.connect.transforms.CamelField$Value",
-    "transforms.camelValueField.mappingId": "bm_part_assembly_ebom:bm_part_assembly_id,bm_part_assembly_mbom:bm_part_assembly_id,bm_part_assembly_sbom:bm_part_assembly_id,bm_part_assembly_pbom:bm_part_assembly_id"
-  }
+  ,"config": {
+  "connector.class": "io.confluent.connect.elasticsearch.ElasticsearchSinkConnector",
+  "tasks.max": "1",
+  "connection.url": "https://kafka-es.gantcloud.com",
+  "connection.user": "",
+  "connection.password": "",
+  "topics.regex": "^ibom.*$",
+  "type.name": "_doc",
+  "schema.ignore": "true",
+  "key.ignore": "false",
+  "behavior.on.null.values":"delete",
+  "consumer.max.partition.fetch.bytes": "52428800",
+  "transforms": "extractAfter,camelKeyField,extractId,camelValueField",
+  "transforms.extractAfter.type": "org.apache.kafka.connect.transforms.ExtractField$Value",
+  "transforms.extractAfter.field": "after",
+  "transforms.camelKeyField.type": "com.gantang.kafka.connect.transforms.CamelField$Key",
+  "transforms.camelKeyField.mappingId": "bm_part_assembly_ebom:bm_part_assembly_id,bm_part_assembly_mbom:bm_part_assembly_id,bm_part_assembly_sbom:bm_part_assembly_id,bm_part_assembly_pbom:bm_part_assembly_id",
+  "transforms.extractId.type": "org.apache.kafka.connect.transforms.ExtractField$Key",
+  "transforms.extractId.field": "id",
+  "transforms.camelValueField.type": "com.gantang.kafka.connect.transforms.CamelField$Value",
+  "transforms.camelValueField.mappingId": "bm_part_assembly_ebom:bm_part_assembly_id,bm_part_assembly_mbom:bm_part_assembly_id,bm_part_assembly_sbom:bm_part_assembly_id,bm_part_assembly_pbom:bm_part_assembly_id"
+}
 }

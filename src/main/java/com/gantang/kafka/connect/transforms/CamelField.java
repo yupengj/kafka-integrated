@@ -19,8 +19,8 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-import static org.apache.kafka.connect.transforms.util.Requirements.requireMap;
-import static org.apache.kafka.connect.transforms.util.Requirements.requireStruct;
+import static org.apache.kafka.connect.transforms.util.Requirements.requireMapOrNull;
+import static org.apache.kafka.connect.transforms.util.Requirements.requireStructOrNull;
 
 /**
  * 数据库字段（material_num） 转成驼峰名称（materialNum）
@@ -103,7 +103,8 @@ public abstract class CamelField<R extends ConnectRecord<R>> implements Transfor
 
     @Override
     public R apply(R record) {
-        if (operatingSchema(record) == null) {
+        final Schema schema = operatingSchema(record);
+        if (schema == null) {
             // 没有 schema
             return applySchemaless(record);
         } else {
@@ -119,7 +120,10 @@ public abstract class CamelField<R extends ConnectRecord<R>> implements Transfor
      * @return 新的record
      */
     private R applySchemaless(R record) {
-        final Map<String, Object> value = requireMap(operatingValue(record), PURPOSE);
+        final Map<String, Object> value = requireMapOrNull(operatingValue(record), PURPOSE);
+        if (value == null) {
+            return newRecord(record, null, null);
+        }
         final String tableName = tableName(record.topic());
 
         final Map<String, Object> updatedValue = new HashMap<>(value.size());
@@ -212,9 +216,13 @@ public abstract class CamelField<R extends ConnectRecord<R>> implements Transfor
      * @return 新的 record
      */
     private R applyWithSchema(R record) {
-        final Struct value = requireStruct(operatingValue(record), PURPOSE);
-        final String tableName = tableName(record.topic());
+        final Struct value = requireStructOrNull(operatingValue(record), PURPOSE);
+        if (value == null) {
+            // value 等于 null
+            return newRecord(record, operatingSchema(record), null);
+        }
 
+        final String tableName = tableName(record.topic());
         Schema updatedSchema = schemaUpdateCache.get(value.schema());
         if (updatedSchema == null) {
             updatedSchema = makeUpdatedSchema(value.schema(), tableName);
