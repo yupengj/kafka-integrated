@@ -1,18 +1,18 @@
 {
-  "name": "pg-source",
+  "name": "ibom-pg-source",
   "config": {
     "connector.class": "io.debezium.connector.postgresql.PostgresConnector",
     "tasks.max": "1",
-    "database.hostname": "localhost",
+    "database.hostname": "192.168.2.42",
     "database.port": "5432",
     "database.user": "postgres",
-    "database.password": "app",
+    "database.password": "172888",
     "database.dbname": "postgres",
     "database.server.name": "ibom",
-    "schema.whitelist": "mstdata",
-    "table.blacklist": "mstdata.schema_version",
+    "table.whitelist": "mstdata.md_part_type,mstdata.md_material,mstdata.md_part_design,mstdata.md_part_supply,mstdata.md_supplier,mstdata.md_part_service,mstdata.md_part_deviation_index,mstdata.md_part_desc,mstdata.md_color,mstdata.md_product_type,mstdata.md_product_node,mstdata.md_product_structure,mstdata.md_vehicle_material,mstdata.md_plant,mstdata.md_plant_layout,mstdata.md_route_line,mstdata.md_route_node,mstdata.md_route_node,mstdata.md_change,mstdata.md_feature,bommgmt.bm_part_assembly_ebom,bommgmt.bm_part_assembly_mbom,bommgmt.bm_part_assembly_sbom,bommgmt.bm_part_assembly_pbom",
     "plugin.name": "wal2json",
     "snapshot.mode": "initial",
-    "slot.name": "test"
+    "slot.name": "debezium",
+    "time.precision.mode": "connect"
   }
 }
