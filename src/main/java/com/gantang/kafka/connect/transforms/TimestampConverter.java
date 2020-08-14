@@ -17,7 +17,7 @@ import java.text.SimpleDateFormat;
 import java.util.Date;
 import java.util.Map;
 
-import static org.apache.kafka.connect.transforms.util.Requirements.requireStruct;
+import static org.apache.kafka.connect.transforms.util.Requirements.requireStructOrNull;
 
 /**
  * 转换所有 schema name 等于 org.apache.kafka.connect.data.Timestamp 的字段，将值转换成 yyyy-MM-dd 日期格式
@@ -53,15 +53,24 @@ public class TimestampConverter<R extends ConnectRecord<R>> implements Transform
         }
     }
 
+    /**
+     * 转换日期字段 schema 和 value
+     *
+     * @param record record
+     * @return record
+     */
     private R applyWithSchema(R record) {
         final Schema schema = operatingSchema(record);
-        final Struct value = requireStruct(operatingValue(record), PURPOSE);
+        final Struct value = requireStructOrNull(operatingValue(record), PURPOSE);
+        if (value == null) {
+            return record;
+        }
         Schema updatedSchema = schemaUpdateCache.get(value.schema());
         if (updatedSchema == null) {
             SchemaBuilder builder = SchemaUtil.copySchemaBasics(schema, SchemaBuilder.struct());
             for (Field field : schema.fields()) {
                 if (TIMESTAMP_TYPE.equals(field.schema().name())) {
-                    builder.field(field.name(), Schema.STRING_SCHEMA);
+                    builder.field(field.name(), convertFieldSchema(field.schema()));
                 } else {
                     builder.field(field.name(), field.schema());
                 }
@@ -80,6 +89,27 @@ public class TimestampConverter<R extends ConnectRecord<R>> implements Transform
         return newRecord(record, updatedSchema, updatedValue);
     }
 
+    /**
+     * 转换 schema
+     *
+     * @param fieldSchema 日期字段的schema
+     * @return 转换后的日期 schema
+     */
+    private Schema convertFieldSchema(Schema fieldSchema) {
+        final SchemaBuilder stringBuild = SchemaBuilder.string();
+        if (fieldSchema.isOptional()) {
+            stringBuild.optional();
+        }
+        return stringBuild.build();
+    }
+
+    /**
+     * 转换日期数据
+     *
+     * @param value         所有的value
+     * @param updatedSchema 更新后的 schema
+     * @return 转换后的日期格式
+     */
     private Struct applyValueWithSchema(Struct value, Schema updatedSchema) {
         Struct updatedValue = new Struct(updatedSchema);
         for (Field field : value.schema().fields()) {
@@ -94,6 +124,12 @@ public class TimestampConverter<R extends ConnectRecord<R>> implements Transform
         return updatedValue;
     }
 
+    /**
+     * 转换日期为字符串
+     *
+     * @param timestamp 日期数据
+     * @return 格式化后的日期字符串。或者 null
+     */
     private Object convertTimestamp(Object timestamp) {
         Date date;
         if (timestamp instanceof Long) {

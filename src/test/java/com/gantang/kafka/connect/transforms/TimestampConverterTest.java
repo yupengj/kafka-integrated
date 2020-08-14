@@ -36,16 +36,29 @@ public class TimestampConverterTest {
     @Test
     public void testSchema() {
         final SchemaBuilder int64 = SchemaBuilder.int64();
-        int64.name("org.apache.kafka.connect.data.Timestamp").version(1);
+        int64.name("org.apache.kafka.connect.data.Timestamp").version(1).optional();
         final Schema schema = SchemaBuilder.struct().field("MD_MATERIAL_ID", Schema.INT64_SCHEMA).field("MATERIAL_NUM", Schema.STRING_SCHEMA).field("IS_COLOR", Schema.BOOLEAN_SCHEMA)
                 .field("TEST_ABC", Schema.FLOAT64_SCHEMA).field("CREATED_DATE", int64.build()).build();
         System.out.println(schema);
     }
 
     @Test
+    public void testSchemaCopy() {
+        final SchemaBuilder int64 = SchemaBuilder.int64();
+        int64.name("org.apache.kafka.connect.data.Timestamp").version(1).optional();
+
+        final SchemaBuilder string = SchemaBuilder.string();
+        if (int64.isOptional()) {
+            string.optional();
+        }
+        final Schema build = string.build();
+        System.out.println(">>");
+    }
+
+    @Test
     public void apply() {
         final SchemaBuilder int64 = SchemaBuilder.int64();
-        int64.name("org.apache.kafka.connect.data.Timestamp").version(1);
+        int64.name("org.apache.kafka.connect.data.Timestamp").version(1).optional();
         final Schema schema = SchemaBuilder.struct().field("MD_MATERIAL_ID", Schema.INT64_SCHEMA).field("MATERIAL_NUM", Schema.STRING_SCHEMA).field("IS_COLOR", Schema.BOOLEAN_SCHEMA)
                 .field("TEST_ABC", Schema.FLOAT64_SCHEMA).field("CREATED_DATE", int64.build()).field("UPDATED_DATE", int64.build()).build();
 
@@ -62,7 +75,8 @@ public class TimestampConverterTest {
         final ConnectRecord apply = timestampConverter.apply(record);
         final Struct value1 = (Struct) apply.value();
         final Schema schema1 = apply.valueSchema();
-        Assert.assertEquals(schema1.field("CREATED_DATE").schema(), Schema.STRING_SCHEMA);
+        Assert.assertEquals(schema1.field("CREATED_DATE").schema(), SchemaBuilder.string().optional().build());
+        Assert.assertEquals(schema1.field("CREATED_DATE").schema().isOptional(), int64.isOptional());
         Assert.assertEquals(value1.get("CREATED_DATE"), "2020-08-12");
         Assert.assertEquals(value1.get("UPDATED_DATE"), "2020-08-12");
     }
